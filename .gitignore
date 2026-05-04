@@ -1,0 +1,11 @@
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Data files (too large for GitHub)
+*.csv
+
+# Editor
+.vscode/
+*.swp

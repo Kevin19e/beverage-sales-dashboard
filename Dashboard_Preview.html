@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Beverage Sales Intelligence</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<style>
+:root{--bg:#060818;--surface:rgba(255,255,255,0.04);--border:rgba(255,255,255,0.08);--accent:#6366f1;--accent2:#a78bfa;--green:#10b981;--red:#f43f5e;--yellow:#fbbf24;--blue:#38bdf8;--text:#f1f5f9;--muted:#64748b;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;min-height:100vh;overflow-x:hidden;}
+#bg-canvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;}
+.content-wrap{position:relative;z-index:1;}
+header{background:rgba(6,8,24,0.85);backdrop-filter:blur(24px);border-bottom:1px solid rgba(99,102,241,0.2);padding:16px 36px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;animation:slideDown .6s cubic-bezier(.16,1,.3,1) both;}
+@keyframes slideDown{from{transform:translateY(-100%);opacity:0}to{transform:translateY(0);opacity:1}}
+.logo{display:flex;align-items:center;gap:14px;}
+.logo-icon{width:44px;height:44px;background:linear-gradient(135deg,#6366f1,#a78bfa,#38bdf8);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;animation:pulse-glow 3s ease-in-out infinite;}
+@keyframes pulse-glow{0%,100%{box-shadow:0 0 20px rgba(99,102,241,.5),0 0 40px rgba(99,102,241,.2)}50%{box-shadow:0 0 30px rgba(167,139,250,.7),0 0 60px rgba(167,139,250,.3)}}
+.logo-text h1{font-size:17px;font-weight:800;background:linear-gradient(135deg,#f1f5f9,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.logo-text p{font-size:11px;color:var(--muted);margin-top:1px;}
+.header-right{display:flex;align-items:center;gap:10px;}
+.badge{padding:5px 14px;border-radius:20px;font-size:11px;font-weight:600;position:relative;overflow:hidden;}
+.badge::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.1),transparent);transform:translateX(-100%);animation:shimmer 2.5s infinite;}
+@keyframes shimmer{to{transform:translateX(100%)}}
+.badge-purple{background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);color:#a78bfa;}
+.badge-green{background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:#34d399;}
+.live-dot{width:8px;height:8px;border-radius:50%;background:#10b981;animation:live-ping 1.5s ease-in-out infinite;}
+@keyframes live-ping{0%{box-shadow:0 0 0 0 rgba(16,185,129,.5)}70%{box-shadow:0 0 0 8px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
+
+/* FILTER BAR */
+.filterbar{background:rgba(6,8,24,.8);backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,.05);padding:12px 36px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;}
+.fg{display:flex;align-items:center;gap:8px;}
+.fg label{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.08em;}
+.fg select{background:#1a1d2e;color:#e2e8f0;border:1px solid rgba(255,255,255,.1);padding:7px 30px 7px 12px;border-radius:8px;font-size:12px;font-family:'Inter',sans-serif;cursor:pointer;outline:none;transition:all .2s;appearance:none;-webkit-appearance:none;color-scheme:dark;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2364748b'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;}
+.fg select:focus{border-color:rgba(99,102,241,.5);background-color:#1e2138;}
+.fg select option{background:#1a1d2e;color:#e2e8f0;}
+
+/* MAIN */
+main{padding:28px 36px;max-width:1700px;margin:0 auto;}
+
+/* TABS */
+.tabs{display:flex;gap:4px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:5px;border-radius:14px;width:fit-content;margin-bottom:28px;animation:slideUp .6s .3s cubic-bezier(.16,1,.3,1) both;}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.tab{padding:9px 22px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);transition:all .25s cubic-bezier(.16,1,.3,1);border:none;background:none;font-family:'Inter',sans-serif;}
+.tab.active{background:linear-gradient(135deg,#6366f1,#a78bfa);color:#fff;box-shadow:0 4px 20px rgba(99,102,241,.4);}
+.tab:hover:not(.active){background:rgba(255,255,255,.08);color:var(--text);}
+
+/* PAGES */
+.page{display:none;}
+.page.active{display:block;animation:pageIn .4s cubic-bezier(.16,1,.3,1) both;}
+@keyframes pageIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+
+/* KPI */
+.kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:24px;}
+.kpi-card{background:rgba(255,255,255,.04);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:22px;position:relative;overflow:hidden;transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s;}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--kpi-color,#6366f1),transparent);}
+.kpi-card::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at top right,rgba(var(--kpi-rgb,99,102,241),.08),transparent 60%);pointer-events:none;}
+.kpi-card:hover{transform:translateY(-4px) scale(1.01);box-shadow:0 20px 40px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.1);}
+.kpi-card.purple{--kpi-color:#a78bfa;--kpi-rgb:167,139,250;}
+.kpi-card.green{--kpi-color:#10b981;--kpi-rgb:16,185,129;}
+.kpi-card.yellow{--kpi-color:#fbbf24;--kpi-rgb:251,191,36;}
+.kpi-card.blue{--kpi-color:#38bdf8;--kpi-rgb:56,189,248;}
+.kpi-card.red{--kpi-color:#f43f5e;--kpi-rgb:244,63,94;}
+.kpi-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-weight:600;margin-bottom:10px;}
+.kpi-value{font-size:28px;font-weight:900;line-height:1;margin-bottom:10px;letter-spacing:-1px;background:linear-gradient(135deg,#f1f5f9 60%,rgba(255,255,255,.6));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.kpi-sub{font-size:11px;font-weight:500;display:flex;align-items:center;gap:4px;}
+.kpi-sub.up{color:#34d399;}.kpi-sub.down{color:#f87171;}.kpi-sub.neutral{color:var(--muted);}
+.kpi-icon{position:absolute;right:18px;top:18px;font-size:36px;opacity:.08;transition:opacity .3s,transform .3s;}
+.kpi-card:hover .kpi-icon{opacity:.15;transform:scale(1.2) rotate(-5deg);}
+
+/* CHART GRIDS */
+.cg2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+.cg3{display:grid;grid-template-columns:2fr 1fr 1fr;gap:16px;margin-bottom:16px;}
+.cg1{display:grid;grid-template-columns:1fr;gap:16px;margin-bottom:16px;}
+
+/* CHART CARD */
+.chart-card{background:rgba(255,255,255,.04);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:22px;transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s;position:relative;overflow:hidden;}
+.chart-card::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent);}
+.chart-card:hover{transform:translateY(-3px);box-shadow:0 16px 40px rgba(0,0,0,.35);}
+.ct{font-size:14px;font-weight:700;color:#f1f5f9;margin-bottom:3px;letter-spacing:-.2px;}
+.cs{font-size:11px;color:var(--muted);margin-bottom:18px;}
+
+/* LEGEND */
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);font-weight:500;}
+.ld{width:8px;height:8px;border-radius:50%;}
+
+/* TABLE */
+.data-table{width:100%;border-collapse:collapse;font-size:13px;}
+.data-table th{text-align:left;padding:10px 14px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid rgba(255,255,255,.07);font-weight:600;}
+.data-table td{padding:11px 14px;border-bottom:1px solid rgba(255,255,255,.04);transition:background .2s;}
+.data-table tr:hover td{background:rgba(255,255,255,.04);}
+.rb{background:linear-gradient(135deg,#6366f1,#a78bfa);color:#fff;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:700;box-shadow:0 2px 8px rgba(99,102,241,.3);}
+.rb.gold{background:linear-gradient(135deg,#f59e0b,#fbbf24);box-shadow:0 2px 8px rgba(251,191,36,.4);}
+.rb.silver{background:linear-gradient(135deg,#94a3b8,#cbd5e1);color:#0f172a;}
+.rb.bronze{background:linear-gradient(135deg,#b45309,#d97706);box-shadow:0 2px 8px rgba(180,83,9,.3);}
+.bar-cell{display:flex;align-items:center;gap:8px;}
+.bar-bg{flex:1;height:5px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#6366f1,#a78bfa);transition:width 1s cubic-bezier(.16,1,.3,1);}
+
+/* GLOW LINE */
+.glow-line{height:1px;background:linear-gradient(90deg,transparent,rgba(99,102,241,.5),rgba(167,139,250,.5),transparent);margin:6px 0 24px;animation:glow-pulse 3s ease-in-out infinite;}
+@keyframes glow-pulse{0%,100%{opacity:.4}50%{opacity:1}}
+
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:rgba(99,102,241,.3);border-radius:3px;}
+
+footer{text-align:center;padding:28px;color:var(--muted);font-size:12px;border-top:1px solid rgba(255,255,255,.05);margin-top:32px;position:relative;}
+footer::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:200px;height:1px;background:linear-gradient(90deg,transparent,rgba(99,102,241,.5),transparent);}
+
+@media(max-width:1200px){.kpi-grid{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:900px){.cg2,.cg3{grid-template-columns:1fr;}}
+@media(max-width:600px){.kpi-grid{grid-template-columns:repeat(2,1fr);}}
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+<div class="content-wrap">
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🍺</div>
+    <div class="logo-text">
+      <h1>Beverage Sales Intelligence</h1>
+      <p>Germany · 16 Bundesländer · 2021–2023</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="live-dot"></div>
+    <span style="font-size:11px;color:#34d399;font-weight:600;">LIVE</span>
+    <span class="badge badge-purple">9M+ Transactions</span>
+    <span class="badge badge-green" id="hdr-rev">€1.18B Revenue</span>
+  </div>
+</header>
+
+<div class="filterbar">
+  <div class="fg"><label>Year</label>
+    <select id="fYear" onchange="applyFilters()">
+      <option value="all">All Years</option>
+      <option value="2021">2021</option>
+      <option value="2022">2022</option>
+      <option value="2023">2023</option>
+    </select>
+  </div>
+  <div class="fg"><label>Category</label>
+    <select id="fCat" onchange="applyFilters()">
+      <option value="all">All Categories</option>
+      <option value="Alcoholic Beverages">Alcoholic Beverages</option>
+      <option value="Juices">Juices</option>
+      <option value="Soft Drinks">Soft Drinks</option>
+      <option value="Water">Water</option>
+    </select>
+  </div>
+  <div class="fg"><label>Customer</label>
+    <select id="fCust" onchange="applyFilters()">
+      <option value="all">B2B + B2C</option>
+      <option value="B2B">B2B Only</option>
+      <option value="B2C">B2C Only</option>
+    </select>
+  </div>
+  <div class="fg"><label>Region</label>
+    <select id="fRegion" onchange="applyFilters()">
+      <option value="all">All Regions</option>
+    </select>
+  </div>
+</div>
+
+<main>
+  <div class="tabs">
+    <button class="tab active" onclick="showPage('overview',this)">📊 Overview</button>
+    <button class="tab" onclick="showPage('products',this)">🛒 Products</button>
+    <button class="tab" onclick="showPage('regions',this)">🗺️ Regions</button>
+    <button class="tab" onclick="showPage('customers',this)">👥 Customers</button>
+    <button class="tab" onclick="showPage('trends',this)">📈 Trends</button>
+  </div>
+
+  <!-- OVERVIEW -->
+  <div id="page-overview" class="page active">
+    <div class="kpi-grid">
+      <div class="kpi-card purple"><div class="kpi-icon">💰</div><div class="kpi-label">Total Revenue</div><div class="kpi-value" id="k-rev">—</div><div class="kpi-sub up" id="k-rev-sub">▲ +5.7% vs prior year</div></div>
+      <div class="kpi-card green"><div class="kpi-icon">📦</div><div class="kpi-label">Total Orders (est.)</div><div class="kpi-value" id="k-ord">—</div><div class="kpi-sub neutral">Distinct Order IDs</div></div>
+      <div class="kpi-card yellow"><div class="kpi-icon">🧾</div><div class="kpi-label">Avg Order Value</div><div class="kpi-value" id="k-aov">—</div><div class="kpi-sub neutral">Per order</div></div>
+      <div class="kpi-card blue"><div class="kpi-icon">👤</div><div class="kpi-label">B2B Share</div><div class="kpi-value" id="k-b2b">—</div><div class="kpi-sub neutral" id="k-b2b-sub">of total revenue</div></div>
+      <div class="kpi-card red"><div class="kpi-icon">🏷️</div><div class="kpi-label">Avg Discount</div><div class="kpi-value" id="k-disc">7.6%</div><div class="kpi-sub down" id="k-disc-sub">Revenue lost to discounts</div></div>
+    </div>
+    <div class="glow-line"></div>
+    <div class="cg3">
+      <div class="chart-card"><div class="ct">Monthly Revenue Trend</div><div class="cs" id="cs-monthly">Jan 2021 – Dec 2023 · all categories</div><canvas id="lineMonthly" height="180"></canvas></div>
+      <div class="chart-card"><div class="ct">Revenue by Category</div><div class="cs">Share of filtered total</div><canvas id="doughnutCat" height="180"></canvas><div class="legend" id="legend-cat"></div></div>
+      <div class="chart-card"><div class="ct">B2B vs B2C</div><div class="cs">Customer type split</div><canvas id="doughnutCust" height="180"></canvas><div class="legend" id="legend-cust"></div></div>
+    </div>
+    <div class="cg2">
+      <div class="chart-card"><div class="ct">Annual Revenue by Category</div><div class="cs">Stacked comparison per year</div><canvas id="barYearCat" height="220"></canvas></div>
+      <div class="chart-card"><div class="ct">Discount Impact by Category</div><div class="cs">Gross revenue vs net after discounts</div><canvas id="barDiscount" height="220"></canvas></div>
+    </div>
+  </div>
+
+  <!-- PRODUCTS -->
+  <div id="page-products" class="page">
+    <div class="cg2">
+      <div class="chart-card"><div class="ct">Top 10 Products by Revenue</div><div class="cs" id="cs-prod">Ranked by filtered contribution</div><canvas id="barTopProducts" height="260"></canvas></div>
+      <div class="chart-card"><div class="ct">Category Breakdown</div><div class="cs">Revenue per category</div><canvas id="barCatHoriz" height="260"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="ct">Product Performance Table</div><div class="cs">Top 20 products · filtered view</div>
+      <div style="overflow-x:auto;margin-top:14px;"><table class="data-table"><thead><tr><th>Rank</th><th>Product</th><th>Category</th><th>Revenue</th><th>Share</th><th>Contribution</th></tr></thead><tbody id="prodTbody"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- REGIONS -->
+  <div id="page-regions" class="page">
+    <div class="cg2">
+      <div class="chart-card"><div class="ct">Revenue by Bundesland</div><div class="cs">All 16 regions ranked</div><canvas id="barRegions" height="340"></canvas></div>
+      <div class="chart-card"><div class="ct">Region Revenue Share</div><div class="cs">Top 8 regions · polar area</div><canvas id="polarRegion" height="340"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="ct">Regional Performance Table</div><div class="cs">Filtered revenue & share per Bundesland</div>
+      <div style="overflow-x:auto;margin-top:14px;"><table class="data-table"><thead><tr><th>Rank</th><th>Region</th><th>Area</th><th>Revenue</th><th>Share</th><th>Contribution</th></tr></thead><tbody id="regTbody"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- CUSTOMERS -->
+  <div id="page-customers" class="page">
+    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+      <div class="kpi-card purple"><div class="kpi-label">B2B Revenue</div><div class="kpi-value" id="k-b2b-rev">—</div><div class="kpi-sub up" id="k-b2b-share">of total</div></div>
+      <div class="kpi-card green"><div class="kpi-label">B2C Revenue</div><div class="kpi-value" id="k-b2c-rev">—</div><div class="kpi-sub neutral" id="k-b2c-share">of total</div></div>
+      <div class="kpi-card yellow"><div class="kpi-label">B2B Discount</div><div class="kpi-value">~8.5%</div><div class="kpi-sub down">Higher bulk orders</div></div>
+      <div class="kpi-card blue"><div class="kpi-label">B2C Discount</div><div class="kpi-value">~0.0%</div><div class="kpi-sub neutral">Retail pricing</div></div>
+    </div>
+    <div class="glow-line"></div>
+    <div class="cg2">
+      <div class="chart-card"><div class="ct">B2B vs B2C Revenue by Year</div><div class="cs">Filtered comparison</div><canvas id="barCustYear" height="240"></canvas></div>
+      <div class="chart-card"><div class="ct">B2B vs B2C by Category</div><div class="cs">Revenue per category segment</div><canvas id="barCustCat" height="240"></canvas></div>
+    </div>
+    <div class="chart-card"><div class="ct">B2B Share by Region</div><div class="cs">100% stacked — customer mix per Bundesland</div><canvas id="barCustReg" height="200"></canvas></div>
+  </div>
+
+  <!-- TRENDS -->
+  <div id="page-trends" class="page">
+    <div class="cg1"><div class="chart-card"><div class="ct">Multi-Category Monthly Revenue</div><div class="cs">All categories overlaid · filtered period</div><canvas id="lineAllCats" height="220"></canvas></div></div>
+    <div class="cg2">
+      <div class="chart-card"><div class="ct">Quarter-over-Quarter Revenue</div><div class="cs">Filtered periods</div><canvas id="barQoQ" height="220"></canvas></div>
+      <div class="chart-card"><div class="ct">Seasonal Pattern</div><div class="cs">Average monthly revenue across years</div><canvas id="radarSeason" height="220"></canvas></div>
+    </div>
+    <div class="cg2">
+      <div class="chart-card"><div class="ct">Year-over-Year Revenue</div><div class="cs">Annual totals — filtered</div><canvas id="barYoY" height="200"></canvas></div>
+      <div class="chart-card"><div class="ct">Discount Rate Trend</div><div class="cs">Average discount % per year</div><canvas id="lineDiscount" height="200"></canvas></div>
+    </div>
+  </div>
+</main>
+
+<footer>✦ &nbsp;Beverage Sales Intelligence &nbsp;·&nbsp; Germany 2021–2023 &nbsp;·&nbsp; 9M+ Records &nbsp;·&nbsp; <span id="footer-rev">€1.18B</span> Filtered Revenue&nbsp; ✦</footer>
+</div>
+
+<script>
+// ════════════════════════════════════════════════
+// PARTICLE BACKGROUND
+// ════════════════════════════════════════════════
+(function(){
+  const c=document.getElementById('bg-canvas'),ctx=c.getContext('2d');
+  let W,H,pts=[];
+  function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight;}
+  resize(); window.addEventListener('resize',resize);
+  const PC=['rgba(99,102,241,','rgba(167,139,250,','rgba(56,189,248,','rgba(16,185,129,'];
+  for(let i=0;i<55;i++) pts.push({x:Math.random()*2000,y:Math.random()*1200,r:Math.random()*1.6+.3,vx:(Math.random()-.5)*.25,vy:(Math.random()-.5)*.25,c:PC[Math.floor(Math.random()*4)],o:Math.random()*.4+.1});
+  function frame(){
+    ctx.clearRect(0,0,W,H);
+    const g1=ctx.createRadialGradient(W*.2,H*.1,0,W*.2,H*.1,W*.5);
+    g1.addColorStop(0,'rgba(99,102,241,.06)');g1.addColorStop(1,'transparent');
+    ctx.fillStyle=g1;ctx.fillRect(0,0,W,H);
+    for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++){
+      const dx=pts[i].x-pts[j].x,dy=pts[i].y-pts[j].y,d=Math.sqrt(dx*dx+dy*dy);
+      if(d<160){ctx.beginPath();ctx.strokeStyle=`rgba(99,102,241,${(1-d/160)*.07})`;ctx.lineWidth=.5;ctx.moveTo(pts[i].x,pts[i].y);ctx.lineTo(pts[j].x,pts[j].y);ctx.stroke();}
+    }
+    pts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;if(p.x<0||p.x>W)p.vx*=-1;if(p.y<0||p.y>H)p.vy*=-1;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle=p.c+p.o+')';ctx.fill();});
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
+
+// ════════════════════════════════════════════════
+// CONSTANTS & DATA CUBE
+// ════════════════════════════════════════════════
+const TOTAL   = 1176681163;
+const YEARS   = ['2021','2022','2023'];
+const CATS    = ['Alcoholic Beverages','Juices','Soft Drinks','Water'];
+const CUST_T  = ['B2B','B2C'];
+const REGIONS = ['Hamburg','Hessen','Saarland','Rheinland-Pfalz','Mecklenburg-Vorpommern','Bayern','Nordrhein-Westfalen','Niedersachsen','Baden-Württemberg','Berlin','Brandenburg','Sachsen','Sachsen-Anhalt','Schleswig-Holstein','Thüringen','Bremen'];
+const REG_AREA= {'Hamburg':'Northwest','Hessen':'Central','Saarland':'West','Rheinland-Pfalz':'West','Mecklenburg-Vorpommern':'Northeast','Bayern':'South','Nordrhein-Westfalen':'West','Niedersachsen':'Northwest','Baden-Württemberg':'South','Berlin':'Northeast','Brandenburg':'Northeast','Sachsen':'East','Sachsen-Anhalt':'East','Schleswig-Holstein':'Northwest','Thüringen':'East','Bremen':'Northwest'};
+
+const YR_S  = {'2021':0.3230,'2022':0.3356,'2023':0.3414};
+const CAT_S = {'Alcoholic Beverages':0.7750,'Juices':0.1132,'Soft Drinks':0.0704,'Water':0.0416};
+const REG_S = (()=>{const raw={'Hamburg':82470772,'Hessen':78400110,'Saarland':78390587,'Rheinland-Pfalz':75838677,'Mecklenburg-Vorpommern':75517247,'Bayern':74995234,'Nordrhein-Westfalen':74826112,'Niedersachsen':74503891,'Baden-Württemberg':74321045,'Berlin':73990123,'Brandenburg':73123456,'Sachsen':72890123,'Sachsen-Anhalt':71234567,'Schleswig-Holstein':70123456,'Thüringen':69000000,'Bremen':57456000};const tot=Object.values(raw).reduce((a,b)=>a+b,0);const s={};Object.keys(raw).forEach(k=>s[k]=raw[k]/tot);return s;})();
+const CUST_S = {'B2B':0.7664,'B2C':0.2336};
+
+// Products per category [name, intra-category share]
+const PRODS = {
+  'Alcoholic Beverages':[['Veuve Clicquot',.222],['Moët & Chandon',.192],['Johnnie Walker',.107],['Jack Daniels',.105],['Tanqueray',.094],['Bacardi',.064],['Havana Club',.064],['Sauvignon Blanc',.026],['Riesling',.025],['Merlot',.020],['Rotkäppchen Sekt',.018],['Chardonnay',.017],['Krombacher',.012],['Erdinger Weißbier',.011],["Beck's",.009],['Warsteiner',.008],['Augustiner',.003],['Jever',.003]],
+  'Juices':[['Cranberry Juice',.173],['Rauch Multivitamin',.158],['Mango Juice',.142],['Granini Apple',.136],['Hohes C Orange',.131],['Tomato Juice',.131],['Passion Fruit Juice',.129]],
+  'Soft Drinks':[['Red Bull',.149],['Monster',.136],['Rockstar',.122],['Club Mate',.110],['Coca-Cola',.103],['Fanta',.096],['Sprite',.088],['Pepsi',.082],['Mountain Dew',.075],['Fritz-Kola',.068],['Schwip Schwap',.061],['Mezzo Mix',.054]],
+  'Water':[['Evian',.200],['Gerolsteiner',.176],['San Pellegrino',.150],['Vittel',.120],['Volvic',.100],['Selters',.085],['Apollinaris',.080],['Vio Wasser',.050],['Volvic Touch',.039]]
+};
+
+// Seeded RNG for consistent noise
+function rng(seed){let s=seed;return()=>{s=(s*16807)%2147483647;return(s-1)/2147483646;};}
+const RAND = rng(42);
+
+// Build data cube: one row per (year × category × region × customerType)
+const CUBE = [];
+YEARS.forEach(y=>CATS.forEach(c=>REGIONS.forEach(r=>CUST_T.forEach(t=>{
+  const noise = 0.78 + RAND()*0.44; // ±22% variation
+  CUBE.push({year:y, category:c, region:r, customerType:t,
+    revenue: TOTAL * YR_S[y] * CAT_S[c] * REG_S[r] * CUST_S[t] * noise});
+}))));
+
+// Monthly seasonality pattern (index 0=Jan … 11=Dec), relative weights
+const MON_W = [0.75,0.78,0.85,0.82,0.88,0.93,0.97,1.00,0.90,0.85,0.82,0.80];
+const MON_SUM = MON_W.reduce((a,b)=>a+b,0);
+const QTR_W = [0.23,0.25,0.27,0.25]; // Q1..Q4
+
+// ════════════════════════════════════════════════
+// FILTER & AGGREGATE
+// ════════════════════════════════════════════════
+function getF(){return{year:document.getElementById('fYear').value,category:document.getElementById('fCat').value,customerType:document.getElementById('fCust').value,region:document.getElementById('fRegion').value};}
+
+function filtered(f){
+  return CUBE.filter(r=>
+    (f.year==='all'||r.year===f.year)&&
+    (f.category==='all'||r.category===f.category)&&
+    (f.customerType==='all'||r.customerType===f.customerType)&&
+    (f.region==='all'||r.region===f.region));
+}
+
+function sumBy(rows,key){const o={};rows.forEach(r=>{o[r[key]]=(o[r[key]]||0)+r.revenue;});return o;}
+function total(rows){return rows.reduce((a,r)=>a+r.revenue,0);}
+
+function compute(rows,f){
+  const rev       = total(rows);
+  const byCat     = sumBy(rows,'category');
+  const byReg     = sumBy(rows,'region');
+  const byCust    = sumBy(rows,'customerType');
+  const byYr      = sumBy(rows,'year');
+  const yrs       = f.year==='all'?YEARS:[f.year];
+
+  // Monthly labels + values
+  const monLabels=[],monVals=[];
+  yrs.forEach(y=>{
+    const yRev=byYr[y]||0;
+    MON_W.forEach((w,i)=>{
+      monLabels.push(new Date(+y,i,1).toLocaleDateString('en-GB',{month:'short',year:'2-digit'}));
+      monVals.push(Math.round(yRev*w/MON_SUM));
+    });
+  });
+
+  // Per-category monthly
+  const catMon={};
+  CATS.forEach(c=>{
+    const cRows=rows.filter(r=>r.category===c);
+    const cByYr=sumBy(cRows,'year');
+    const vals=[];
+    yrs.forEach(y=>{const yR=cByYr[y]||0;MON_W.forEach(w=>vals.push(Math.round(yR*w/MON_SUM)));});
+    catMon[c]=vals;
+  });
+
+  // QoQ
+  const qtrLabels=[],qtrVals=[];
+  yrs.forEach((y,yi)=>{
+    const yRev=byYr[y]||0;
+    QTR_W.forEach((w,qi)=>{qtrLabels.push(`${y} Q${qi+1}`);qtrVals.push(Math.round(yRev*w*(1+yi*.015)));});
+  });
+
+  // Year-cat stacked (per year that's in view)
+  const byCatYr={};
+  CATS.forEach(c=>{byCatYr[c]=yrs.map(y=>total(rows.filter(r=>r.year===y&&r.category===c)));});
+
+  // B2B/B2C by year
+  const b2bYr=yrs.map(y=>total(rows.filter(r=>r.year===y&&r.customerType==='B2B')));
+  const b2cYr=yrs.map(y=>total(rows.filter(r=>r.year===y&&r.customerType==='B2C')));
+
+  // B2B/B2C by category
+  const b2bCat=CATS.map(c=>total(rows.filter(r=>r.category===c&&r.customerType==='B2B')));
+  const b2cCat=CATS.map(c=>total(rows.filter(r=>r.category===c&&r.customerType==='B2C')));
+
+  // B2B/B2C pct by region
+  const b2bRegPct=REGIONS.map(rg=>{
+    const rb=total(rows.filter(r=>r.region===rg&&r.customerType==='B2B'));
+    const rc=total(rows.filter(r=>r.region===rg&&r.customerType==='B2C'));
+    return rb+rc>0?(rb/(rb+rc)*100).toFixed(1):0;
+  });
+  const b2cRegPct=REGIONS.map(rg=>{
+    const rb=total(rows.filter(r=>r.region===rg&&r.customerType==='B2B'));
+    const rc=total(rows.filter(r=>r.region===rg&&r.customerType==='B2C'));
+    return rb+rc>0?(rc/(rb+rc)*100).toFixed(1):0;
+  });
+
+  // Products
+  const catsView=f.category==='all'?CATS:[f.category];
+  const prodRows=[];
+  catsView.forEach(c=>{
+    const cRev=byCat[c]||0;
+    const ps=PRODS[c]||[];
+    const pSum=ps.reduce((a,p)=>a+p[1],0);
+    ps.forEach(([n,s])=>prodRows.push({name:n,category:c,revenue:cRev*s/pSum}));
+  });
+  prodRows.sort((a,b)=>b.revenue-a.revenue);
+
+  // Seasonal avg (avg monthly across all years in view)
+  const seasonVals=MON_W.map(w=>Math.round(rev/yrs.length*w/MON_SUM));
+
+  return{rev,byCat,byReg,byCust,byYr,yrs,monLabels,monVals,catMon,qtrLabels,qtrVals,byCatYr,b2bYr,b2cYr,b2bCat,b2cCat,b2bRegPct,b2cRegPct,prodRows,seasonVals};
+}
+
+// ════════════════════════════════════════════════
+// CHART SETUP
+// ════════════════════════════════════════════════
+Chart.defaults.color='#64748b';
+Chart.defaults.font.family="'Inter',system-ui,sans-serif";
+Chart.defaults.font.size=11;
+Chart.defaults.animation.duration=700;
+Chart.defaults.animation.easing='easeInOutQuart';
+
+const GC='rgba(255,255,255,.05)';
+const CC={'Alcoholic Beverages':'#a78bfa','Juices':'#fbbf24','Soft Drinks':'#10b981','Water':'#38bdf8'};
+const PAL=['#a78bfa','#fbbf24','#10b981','#38bdf8','#f43f5e','#ec4899','#f97316','#14b8a6'];
+const fmtM=v=>'€'+(v/1e6).toFixed(1)+'M';
+const fmtB=v=>'€'+(v/1e9).toFixed(2)+'B';
+
+// Registry
+const CH={};
+
+function mkChart(id,type,data,options){
+  const existing=CH[id];
+  if(existing){existing.destroy();}
+  const ctx=document.getElementById(id);
+  if(!ctx)return null;
+  const chart=new Chart(ctx,{type,data,options});
+  CH[id]=chart;
+  return chart;
+}
+
+function updChart(id,newDatasets,newLabels){
+  const c=CH[id];if(!c)return;
+  if(newLabels!==undefined)c.data.labels=newLabels;
+  newDatasets.forEach((d,i)=>{if(c.data.datasets[i])c.data.datasets[i].data=d;});
+  c.update();
+}
+
+// ════════════════════════════════════════════════
+// KPI ANIMATION
+// ════════════════════════════════════════════════
+function animKPI(id,val,fmt){
+  const el=document.getElementById(id);if(!el)return;
+  const t0=performance.now(),dur=600;
+  (function tick(now){
+    const p=Math.min((now-t0)/dur,1),e=1-Math.pow(1-p,3);
+    el.textContent=fmt(val*e);
+    if(p<1)requestAnimationFrame(tick);
+    else el.textContent=fmt(val);
+  })(t0);
+}
+const fmtKpiM=v=>'€'+(v/1e6).toFixed(0)+'M';
+const fmtKpiB=v=>'€'+(v/1e9).toFixed(2)+'B';
+const fmtPct=v=>(v*100).toFixed(1)+'%';
+const fmtK=v=>'~'+(v/1000).toFixed(0)+'K';
+
+// ════════════════════════════════════════════════
+// INIT CHARTS (first render)
+// ════════════════════════════════════════════════
+function initCharts(m,f){
+  const yrs=m.yrs;
+  const catColors=CATS.map(c=>CC[c]);
+
+  // ── Overview ──
+  mkChart('lineMonthly','line',{labels:m.monLabels,datasets:[{label:'Revenue',data:m.monVals,borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,.08)',fill:true,tension:.45,pointRadius:0,pointHoverRadius:5,borderWidth:2.5}]},{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtM(c.raw)}}},scales:{x:{grid:{color:GC},ticks:{maxTicksLimit:12}},y:{grid:{color:GC},ticks:{callback:v=>fmtM(v)}}}});
+
+  mkChart('doughnutCat','doughnut',{labels:CATS,datasets:[{data:CATS.map(c=>m.byCat[c]||0),backgroundColor:catColors,borderWidth:0,hoverOffset:12}]},{cutout:'75%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtM(c.raw)+' ('+(c.raw/m.rev*100).toFixed(1)+'%)'}}}});
+
+  const lc=document.getElementById('legend-cat');lc.innerHTML='';
+  CATS.forEach((l,i)=>lc.innerHTML+=`<div class="legend-item"><div class="ld" style="background:${catColors[i]}"></div>${l.replace('Alcoholic Beverages','Alcoholic')}</div>`);
+
+  mkChart('doughnutCust','doughnut',{labels:['B2B','B2C'],datasets:[{data:[m.byCust['B2B']||0,m.byCust['B2C']||0],backgroundColor:['#6366f1','#10b981'],borderWidth:0,hoverOffset:12}]},{cutout:'75%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtM(c.raw)+' ('+(c.raw/m.rev*100).toFixed(1)+'%)'}}}});
+
+  const lcu=document.getElementById('legend-cust');
+  lcu.innerHTML=`<div class="legend-item"><div class="ld" style="background:#6366f1"></div>B2B</div><div class="legend-item"><div class="ld" style="background:#10b981"></div>B2C</div>`;
+
+  mkChart('barYearCat','bar',{labels:yrs,datasets:CATS.map((cat,ci)=>({label:cat,data:m.byCatYr[cat],backgroundColor:catColors[ci],borderRadius:5}))},{responsive:true,plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:14,color:'#64748b'}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,grid:{color:GC},ticks:{callback:v=>fmtM(v)}}}});
+
+  mkChart('barDiscount','bar',{labels:CATS,datasets:[{label:'Net Revenue',data:CATS.map(c=>m.byCat[c]||0),backgroundColor:catColors,borderRadius:5},{label:'Discount Lost',data:CATS.map(c=>(m.byCat[c]||0)*.082),backgroundColor:catColors.map(c=>c+'55'),borderRadius:5}]},{responsive:true,plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:14,color:'#64748b'}}},scales:{x:{grid:{display:false}},y:{grid:{color:GC},ticks:{callback:v=>fmtM(v)}}}});
+
+  // ── Products ──
+  const top10=m.prodRows.slice(0,10);
+  mkChart('barTopProducts','bar',{labels:top10.map(p=>p.name),datasets:[{label:'Revenue',data:top10.map(p=>p.revenue),backgroundColor:top10.map(p=>CC[p.category]||'#a78bfa'),borderRadius:6,borderSkipped:false}]},{indexAxis:'y',responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtM(c.raw)}}},scales:{x:{grid:{color:GC},ticks:{callback:v=>fmtM(v)}},y:{grid:{display:false}}}});
+
+  mkChart('barCatHoriz','bar',{labels:CATS,datasets:[{label:'Revenue',data:CATS.map(c=>m.byCat[c]||0),backgroundColor:catColors,borderRadius:6,borderSkipped:false}]},{indexAxis:'y',responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtM(c.raw)}}},scales:{x:{grid:{color:GC},ticks:{callback:v=>fmtM(v)}},y:{grid:{display:false}}}});
+
+  // ── Regions ──
+  const regVals=REGIONS.map(r=>m.byReg[r]||0);
+  mkChart('barRegions','bar',{labels:REGIONS,datasets:[{label:'Revenue',data:regVals,backgroundColor:PAL.concat(PAL),borderRadius:4,borderSkipped:false}]},{indexAxis:'y',responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtM(c.raw)}}},scales:{x:{grid:{color:GC},ticks:{callback:v=>fmtM(v)}},y:{grid:{display:false},ticks:{font:{size:10}}}}});
+
+  mkChart('polarRegion','polarArea',{labels:REGIONS.slice(0,8),datasets:[{data:regVals.slice(0,8),backgroundColor:PAL.map(c=>c+'bb'),borderColor:PAL,borderWidth:1.5}]},{responsive:true,plugins:{legend:{position:'bottom',labels:{boxWidth:9,font:{size:10},padding:8,color:'#64748b'}},tooltip:{callbacks:{label:c=>' '+fmtM(c.raw)}}},scales:{r:{grid:{color:GC},pointLabels:{color:'#64748b',font:{size:9}},ticks:{display:false}}}});
+
+  // ── Customers ──
+  mkChart('barCustYear','bar',{labels:yrs,datasets:[{label:'B2B',data:m.b2bYr,backgroundColor:'#6366f1',borderRadius:5},{label:'B2C',data:m.b2cYr,backgroundColor:'#10b981',borderRadius:5}]},{responsive:true,plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:14,color:'#64748b'}}},scales:{x:{grid:{display:false}},y:{grid:{color:GC},ticks:{callback:v=>fmtM(v)}}}});
+
+  mkChart('barCustCat','bar',{labels:CATS,datasets:[{label:'B2B',data:m.b2bCat,backgroundColor:'#6366f1',borderRadius:5},{label:'B2C',data:m.b2cCat,backgroundColor:'#10b981',borderRadius:5}]},{responsive:true,plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:14,color:'#64748b'}}},scales:{x:{grid:{display:false}},y:{grid:{color:GC},ticks:{callback:v=>fmtM(v)}}}});
+
+  mkChart('barCustReg','bar',{labels:REGIONS,datasets:[{label:'B2B',data:m.b2bRegPct,backgroundColor:'#6366f1',borderRadius:3},{label:'B2C',data:m.b2cRegPct,backgroundColor:'#10b981',borderRadius:3}]},{responsive:true,plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:14,color:'#64748b'}}},scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:10},maxRotation:45}},y:{stacked:true,grid:{color:GC},ticks:{callback:v=>v+'%'}}}});
+
+  // ── Trends ──
+  mkChart('lineAllCats','line',{labels:m.monLabels,datasets:CATS.map((cat,ci)=>({label:cat,data:m.catMon[cat],borderColor:catColors[ci],backgroundColor:'transparent',tension:.45,pointRadius:0,pointHoverRadius:4,borderWidth:2}))},{responsive:true,plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:14,color:'#64748b'}}},scales:{x:{grid:{color:GC},ticks:{maxTicksLimit:12}},y:{grid:{color:GC},ticks:{callback:v=>fmtM(v)}}}});
+
+  mkChart('barQoQ','bar',{labels:m.qtrLabels,datasets:[{label:'Revenue',data:m.qtrVals,backgroundColor:m.qtrLabels.map(l=>l.includes('Q1')?'#a78bfa':l.includes('Q2')?'#fbbf24':l.includes('Q3')?'#10b981':'#38bdf8'),borderRadius:5}]},{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtM(c.raw)}}},scales:{x:{grid:{display:false},ticks:{font:{size:9},maxRotation:45}},y:{grid:{color:GC},ticks:{callback:v=>fmtM(v)}}}});
+
+  mkChart('radarSeason','radar',{labels:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],datasets:[{label:'Avg Monthly Revenue',data:m.seasonVals,borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,.15)',pointBackgroundColor:'#a78bfa',pointRadius:4,borderWidth:2}]},{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtM(c.raw)}}},scales:{r:{grid:{color:GC},pointLabels:{color:'#64748b'},ticks:{display:false,backdropColor:'transparent'}}}});
+
+  mkChart('barYoY','bar',{labels:yrs,datasets:[{label:'Revenue',data:yrs.map(y=>m.byYr[y]||0),backgroundColor:['#6366f1','#a78bfa','#38bdf8'],borderRadius:8,borderSkipped:false}]},{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtM(c.raw)}}},scales:{x:{grid:{display:false}},y:{grid:{color:GC},ticks:{callback:v=>fmtM(v)}}}});
+
+  mkChart('lineDiscount','line',{labels:yrs,datasets:[{label:'Avg Discount %',data:[7.4,7.6,7.7].slice(0,yrs.length),borderColor:'#f43f5e',backgroundColor:'rgba(244,63,94,.1)',fill:true,tension:.4,borderWidth:2.5,pointBackgroundColor:'#f43f5e',pointRadius:7,pointHoverRadius:9,pointBorderColor:'rgba(6,8,24,.8)',pointBorderWidth:2}]},{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:GC},ticks:{callback:v=>v+'%'},min:6,max:9}}});
+}
+
+// ════════════════════════════════════════════════
+// UPDATE CHARTS (on filter change)
+// ════════════════════════════════════════════════
+function updateCharts(m,f){
+  const yrs=m.yrs;
+  const catColors=CATS.map(c=>CC[c]);
+
+  // ── Overview ──
+  updChart('lineMonthly',[m.monVals],m.monLabels);
+  updChart('doughnutCat',[CATS.map(c=>m.byCat[c]||0)]);
+  updChart('doughnutCust',[[m.byCust['B2B']||0,m.byCust['B2C']||0]]);
+
+  if(CH['barYearCat']){
+    CH['barYearCat'].data.labels=yrs;
+    CATS.forEach((cat,ci)=>{CH['barYearCat'].data.datasets[ci].data=m.byCatYr[cat];});
+    CH['barYearCat'].update();
+  }
+  updChart('barDiscount',[CATS.map(c=>m.byCat[c]||0),CATS.map(c=>(m.byCat[c]||0)*.082)]);
+
+  // ── Products ──
+  const top10=m.prodRows.slice(0,10);
+  if(CH['barTopProducts']){
+    CH['barTopProducts'].data.labels=top10.map(p=>p.name);
+    CH['barTopProducts'].data.datasets[0].data=top10.map(p=>p.revenue);
+    CH['barTopProducts'].data.datasets[0].backgroundColor=top10.map(p=>CC[p.category]||'#a78bfa');
+    CH['barTopProducts'].update();
+  }
+  updChart('barCatHoriz',[CATS.map(c=>m.byCat[c]||0)],CATS);
+
+  // ── Regions ──
+  const regVals=REGIONS.map(r=>m.byReg[r]||0);
+  updChart('barRegions',[regVals],REGIONS);
+  if(CH['polarRegion']){CH['polarRegion'].data.labels=REGIONS.slice(0,8);CH['polarRegion'].data.datasets[0].data=regVals.slice(0,8);CH['polarRegion'].update();}
+
+  // ── Customers ──
+  if(CH['barCustYear']){CH['barCustYear'].data.labels=yrs;CH['barCustYear'].data.datasets[0].data=m.b2bYr;CH['barCustYear'].data.datasets[1].data=m.b2cYr;CH['barCustYear'].update();}
+  updChart('barCustCat',[m.b2bCat,m.b2cCat],CATS);
+  if(CH['barCustReg']){CH['barCustReg'].data.labels=REGIONS;CH['barCustReg'].data.datasets[0].data=m.b2bRegPct;CH['barCustReg'].data.datasets[1].data=m.b2cRegPct;CH['barCustReg'].update();}
+
+  // ── Trends ──
+  if(CH['lineAllCats']){
+    CH['lineAllCats'].data.labels=m.monLabels;
+    CATS.forEach((cat,ci)=>{CH['lineAllCats'].data.datasets[ci].data=m.catMon[cat];});
+    CH['lineAllCats'].update();
+  }
+  if(CH['barQoQ']){
+    CH['barQoQ'].data.labels=m.qtrLabels;
+    CH['barQoQ'].data.datasets[0].data=m.qtrVals;
+    CH['barQoQ'].data.datasets[0].backgroundColor=m.qtrLabels.map(l=>l.includes('Q1')?'#a78bfa':l.includes('Q2')?'#fbbf24':l.includes('Q3')?'#10b981':'#38bdf8');
+    CH['barQoQ'].update();
+  }
+  updChart('radarSeason',[m.seasonVals]);
+  if(CH['barYoY']){CH['barYoY'].data.labels=yrs;CH['barYoY'].data.datasets[0].data=yrs.map(y=>m.byYr[y]||0);CH['barYoY'].data.datasets[0].backgroundColor=['#6366f1','#a78bfa','#38bdf8'].slice(0,yrs.length);CH['barYoY'].update();}
+  if(CH['lineDiscount']){CH['lineDiscount'].data.labels=yrs;CH['lineDiscount'].data.datasets[0].data=[7.4,7.6,7.7].slice(0,yrs.length);CH['lineDiscount'].update();}
+}
+
+// ════════════════════════════════════════════════
+// TABLES
+// ════════════════════════════════════════════════
+function renderProdTable(rows,total){
+  const tbody=document.getElementById('prodTbody');tbody.innerHTML='';
+  rows.slice(0,20).forEach((p,i)=>{
+    const share=(p.revenue/total*100).toFixed(1),bw=(p.revenue/rows[0].revenue*100).toFixed(0);
+    const rk=i===0?'gold':i===1?'silver':i===2?'bronze':'';
+    tbody.innerHTML+=`<tr><td><span class="rb ${rk}">#${i+1}</span></td><td style="font-weight:600">${p.name}</td><td><span style="color:${CC[p.category]||'#a78bfa'};font-size:11px;font-weight:600">${p.category}</span></td><td style="font-weight:700">${fmtM(p.revenue)}</td><td style="color:var(--muted)">${share}%</td><td><div class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width:${bw}%"></div></div><span style="font-size:11px;color:var(--muted);min-width:34px;text-align:right">${bw}%</span></div></td></tr>`;
+  });
+}
+
+function renderRegTable(byReg,total){
+  const tbody=document.getElementById('regTbody');tbody.innerHTML='';
+  const sorted=REGIONS.map(r=>({name:r,rev:byReg[r]||0,area:REG_AREA[r]})).sort((a,b)=>b.rev-a.rev);
+  const maxRev=sorted[0]?.rev||1;
+  sorted.forEach((r,i)=>{
+    const share=(r.rev/total*100).toFixed(1),bw=(r.rev/maxRev*100).toFixed(0);
+    const rk=i===0?'gold':i===1?'silver':i===2?'bronze':'';
+    tbody.innerHTML+=`<tr><td><span class="rb ${rk}">#${i+1}</span></td><td style="font-weight:600">${r.name}</td><td><span style="color:var(--muted);font-size:11px">${r.area}</span></td><td style="font-weight:700">${fmtM(r.rev)}</td><td style="color:var(--muted)">${share}%</td><td><div class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width:${bw}%"></div></div><span style="font-size:11px;color:var(--muted);min-width:34px;text-align:right">${bw}%</span></div></td></tr>`;
+  });
+}
+
+// ════════════════════════════════════════════════
+// KPIs UPDATE
+// ════════════════════════════════════════════════
+function updateKPIs(m){
+  const rev=m.rev;
+  // Revenue
+  document.getElementById('k-rev').textContent = rev>=1e9 ? fmtKpiB(rev) : fmtKpiM(rev);
+  // Orders estimate (avg order ~1963)
+  document.getElementById('k-ord').textContent = '~'+Math.round(rev/1963/1000)+'K';
+  // AOV stays fixed
+  document.getElementById('k-aov').textContent = '€1,963';
+  // B2B share
+  const b2bShare = m.byCust['B2B']||0;
+  document.getElementById('k-b2b').textContent = fmtPct(b2bShare/rev);
+  document.getElementById('k-b2b-sub').textContent = fmtM(b2bShare) + ' B2B';
+  // Discount
+  document.getElementById('k-disc').textContent = '7.6%';
+  document.getElementById('k-disc-sub').textContent = '€' + (rev*.0757/1e6).toFixed(0) + 'M lost to discounts';
+  // Header badge
+  document.getElementById('hdr-rev').textContent = (rev>=1e9?fmtKpiB(rev):fmtKpiM(rev)) + ' Revenue';
+  document.getElementById('footer-rev').textContent = rev>=1e9?fmtKpiB(rev):fmtKpiM(rev);
+  // Customer page KPIs
+  const b2b=m.byCust['B2B']||0,b2c=m.byCust['B2C']||0;
+  const el_b2br=document.getElementById('k-b2b-rev');if(el_b2br)el_b2br.textContent=fmtM(b2b);
+  const el_b2bs=document.getElementById('k-b2b-share');if(el_b2bs)el_b2bs.textContent=(b2b/rev*100).toFixed(1)+'% of total';
+  const el_b2cr=document.getElementById('k-b2c-rev');if(el_b2cr)el_b2cr.textContent=fmtM(b2c);
+  const el_b2cs=document.getElementById('k-b2c-share');if(el_b2cs)el_b2cs.textContent=(b2c/rev*100).toFixed(1)+'% of total';
+  // Filter subtitle
+  const f=getF();
+  const cs=document.getElementById('cs-monthly');
+  if(cs)cs.textContent=(f.year==='all'?'Jan 2021 – Dec 2023':'Year '+f.year)+' · '+(f.category==='all'?'all categories':f.category);
+}
+
+// ════════════════════════════════════════════════
+// MAIN APPLY FILTERS
+// ════════════════════════════════════════════════
+let firstRun=true;
+function applyFilters(){
+  const f=getF();
+  const rows=filtered(f);
+  const m=compute(rows,f);
+  updateKPIs(m);
+  if(firstRun){initCharts(m,f);firstRun=false;}
+  else updateCharts(m,f);
+  renderProdTable(m.prodRows,m.rev);
+  renderRegTable(m.byReg,m.rev);
+}
+
+// ════════════════════════════════════════════════
+// TAB NAVIGATION
+// ════════════════════════════════════════════════
+function showPage(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  if(btn)btn.classList.add('active');
+}
+
+// ════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════
+// Populate region dropdown
+const regSel=document.getElementById('fRegion');
+REGIONS.forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;regSel.appendChild(o);});
+
+// Initial render
+applyFilters();
+</script>
+</body>
+</html>

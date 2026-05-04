@@ -1,0 +1,274 @@
+// ============================================================
+// BEVERAGE SALES DASHBOARD — DAX MEASURES
+// Dataset: synthetic_beverage_sales_data.csv
+// Regions: 16 German Bundesländer | Period: 2021–2023
+// ============================================================
+
+// ─────────────────────────────────────────────
+// TABLE: Sales (loaded from CSV)
+// Columns: Order_ID, Customer_ID, Customer_Type,
+//          Product, Category, Unit_Price, Quantity,
+//          Discount, Total_Price, Region, Order_Date
+// ─────────────────────────────────────────────
+
+
+// ══════════════════════════════════════════════
+// 1. CORE REVENUE MEASURES
+// ══════════════════════════════════════════════
+
+[Total Revenue] =
+SUM(Sales[Total_Price])
+
+[Total Quantity] =
+SUM(Sales[Quantity])
+
+[Total Orders] =
+DISTINCTCOUNT(Sales[Order_ID])
+
+[Gross Revenue (Before Discount)] =
+SUMX(Sales, Sales[Unit_Price] * Sales[Quantity])
+
+[Total Discount Amount] =
+[Gross Revenue (Before Discount)] - [Total Revenue]
+
+[Average Discount %] =
+DIVIDE([Total Discount Amount], [Gross Revenue (Before Discount)], 0)
+
+[Average Order Value] =
+DIVIDE([Total Revenue], [Total Orders], 0)
+
+[Average Unit Price] =
+AVERAGE(Sales[Unit_Price])
+
+[Revenue per Unit] =
+DIVIDE([Total Revenue], [Total Quantity], 0)
+
+
+// ══════════════════════════════════════════════
+// 2. TIME INTELLIGENCE MEASURES
+// ══════════════════════════════════════════════
+
+// Requires a Date table linked to Sales[Order_Date]
+
+[Revenue YTD] =
+TOTALYTD([Total Revenue], 'Date'[Date])
+
+[Revenue MTD] =
+TOTALMTD([Total Revenue], 'Date'[Date])
+
+[Revenue QTD] =
+TOTALQTD([Total Revenue], 'Date'[Date])
+
+[Revenue PY] =
+CALCULATE([Total Revenue], SAMEPERIODLASTYEAR('Date'[Date]))
+
+[Revenue YoY Change] =
+[Total Revenue] - [Revenue PY]
+
+[Revenue YoY % Change] =
+DIVIDE([Revenue YoY Change], [Revenue PY], 0)
+
+[Revenue PM] =
+CALCULATE([Total Revenue], DATEADD('Date'[Date], -1, MONTH))
+
+[Revenue MoM % Change] =
+DIVIDE([Total Revenue] - [Revenue PM], [Revenue PM], 0)
+
+[Revenue 3M Rolling Avg] =
+CALCULATE(
+    AVERAGEX(
+        DATESINPERIOD('Date'[Date], LASTDATE('Date'[Date]), -3, MONTH),
+        [Total Revenue]
+    )
+)
+
+[Revenue 12M Rolling] =
+CALCULATE(
+    [Total Revenue],
+    DATESINPERIOD('Date'[Date], LASTDATE('Date'[Date]), -12, MONTH)
+)
+
+
+// ══════════════════════════════════════════════
+// 3. GROWTH & TREND
+// ══════════════════════════════════════════════
+
+[YoY Growth Flag] =
+IF([Revenue YoY % Change] >= 0, "▲ Growth", "▼ Decline")
+
+[Best Month Revenue] =
+MAXX(
+    SUMMARIZE('Date', 'Date'[Year], 'Date'[MonthNo]),
+    [Total Revenue]
+)
+
+[Cumulative Revenue] =
+CALCULATE(
+    [Total Revenue],
+    FILTER(
+        ALL('Date'),
+        'Date'[Date] <= MAX('Date'[Date])
+    )
+)
+
+
+// ══════════════════════════════════════════════
+// 4. CATEGORY ANALYSIS
+// ══════════════════════════════════════════════
+
+[Revenue % of Total] =
+DIVIDE([Total Revenue], CALCULATE([Total Revenue], ALL(Sales)), 0)
+
+[Category Revenue Share] =
+DIVIDE(
+    [Total Revenue],
+    CALCULATE([Total Revenue], ALL(Sales[Category])),
+    0
+)
+
+[Category Rank] =
+RANKX(
+    ALL(Sales[Category]),
+    [Total Revenue],
+    ,
+    DESC,
+    DENSE
+)
+
+[Top Category] =
+CALCULATE(
+    FIRSTNONBLANK(Sales[Category], 1),
+    TOPN(1, ALL(Sales[Category]), [Total Revenue], DESC)
+)
+
+
+// ══════════════════════════════════════════════
+// 5. PRODUCT ANALYSIS
+// ══════════════════════════════════════════════
+
+[Product Revenue Rank] =
+RANKX(
+    ALL(Sales[Product]),
+    [Total Revenue],
+    ,
+    DESC,
+    DENSE
+)
+
+[Top 10 Products Revenue] =
+CALCULATE(
+    [Total Revenue],
+    TOPN(10, ALL(Sales[Product]), [Total Revenue], DESC)
+)
+
+[Revenue Share in Category] =
+DIVIDE(
+    [Total Revenue],
+    CALCULATE([Total Revenue], ALLEXCEPT(Sales, Sales[Category])),
+    0
+)
+
+[Products Sold Count] =
+DISTINCTCOUNT(Sales[Product])
+
+
+// ══════════════════════════════════════════════
+// 6. CUSTOMER ANALYSIS
+// ══════════════════════════════════════════════
+
+[B2B Revenue] =
+CALCULATE([Total Revenue], Sales[Customer_Type] = "B2B")
+
+[B2C Revenue] =
+CALCULATE([Total Revenue], Sales[Customer_Type] = "B2C")
+
+[B2B Revenue Share] =
+DIVIDE([B2B Revenue], [Total Revenue], 0)
+
+[B2C Revenue Share] =
+DIVIDE([B2C Revenue], [Total Revenue], 0)
+
+[B2B vs B2C Ratio] =
+DIVIDE([B2B Revenue], [B2C Revenue], 0)
+
+[Unique Customers] =
+DISTINCTCOUNT(Sales[Customer_ID])
+
+[Revenue per Customer] =
+DIVIDE([Total Revenue], [Unique Customers], 0)
+
+[Orders per Customer] =
+DIVIDE([Total Orders], [Unique Customers], 0)
+
+
+// ══════════════════════════════════════════════
+// 7. REGIONAL ANALYSIS
+// ══════════════════════════════════════════════
+
+[Region Revenue Share] =
+DIVIDE(
+    [Total Revenue],
+    CALCULATE([Total Revenue], ALL(Sales[Region])),
+    0
+)
+
+[Region Rank] =
+RANKX(
+    ALL(Sales[Region]),
+    [Total Revenue],
+    ,
+    DESC,
+    DENSE
+)
+
+[Top Region] =
+CALCULATE(
+    FIRSTNONBLANK(Sales[Region], 1),
+    TOPN(1, ALL(Sales[Region]), [Total Revenue], DESC)
+)
+
+[Above Average Region Flag] =
+VAR AvgRegionRev =
+    AVERAGEX(ALL(Sales[Region]), [Total Revenue])
+RETURN
+    IF([Total Revenue] >= AvgRegionRev, "Above Avg", "Below Avg")
+
+
+// ══════════════════════════════════════════════
+// 8. DISCOUNT ANALYSIS
+// ══════════════════════════════════════════════
+
+[Avg Discount % by Category] =
+AVERAGEX(Sales, Sales[Discount])
+
+[High Discount Orders] =
+CALCULATE([Total Orders], Sales[Discount] > 0.1)
+
+[Zero Discount Revenue] =
+CALCULATE([Total Revenue], Sales[Discount] = 0)
+
+[Discounted Revenue] =
+CALCULATE([Total Revenue], Sales[Discount] > 0)
+
+[Discount Efficiency] =
+DIVIDE([Discounted Revenue], [Total Discount Amount], 0)
+
+
+// ══════════════════════════════════════════════
+// 9. KPI CARDS (for card visuals)
+// ══════════════════════════════════════════════
+
+[KPI Revenue Label] =
+"€ " & FORMAT([Total Revenue] / 1000000, "#,##0.0") & "M"
+
+[KPI Orders Label] =
+FORMAT([Total Orders], "#,##0")
+
+[KPI AOV Label] =
+"€ " & FORMAT([Average Order Value], "#,##0.00")
+
+[KPI Discount Label] =
+FORMAT([Average Discount %], "0.0%")
+
+[KPI Customers Label] =
+FORMAT([Unique Customers], "#,##0")
