@@ -17,7 +17,7 @@ The dataset covers about €1.18 billion in total revenue across three years. A 
 - Alcoholic beverages make up roughly 77% of all revenue, driven largely by premium champagne and spirits
 - Veuve Clicquot and Moët & Chandon together account for about a third of total sales
 - B2B orders dominate at 76.6% of revenue, with significantly higher average discount rates than B2C
-- Revenue grew steadily year over year — from €380M in 2021 to €402M in 2023
+- Revenue grew steadily year over year from €380M in 2021 to €402M in 2023
 - Hamburg, Hessen, and Saarland are consistently the top-performing regions
 
 ---
